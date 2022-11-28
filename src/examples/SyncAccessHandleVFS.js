@@ -10,7 +10,7 @@ const HEADER_OFFSET_DIGEST = HEADER_MAX_PATH_SIZE;
 const HEADER_OFFSET_DATA = HEADER_OFFSET_DIGEST + HEADER_DIGEST_SIZE;
 
 function log(...args) {
-  // console.debug(...args);
+  console.debug(...args);
 }
 
 export class SyncAccessHandleVFS extends VFS.Base {
@@ -20,6 +20,8 @@ export class SyncAccessHandleVFS extends VFS.Base {
   #mapPathToAccessHandle = new Map();
   #mapAccessHandleToName = new Map();
 
+  #mapIdToFile = new Map();
+
   constructor(directoryPath) {
     super();
     this.#ready = this.#initialize(directoryPath);
@@ -27,8 +29,132 @@ export class SyncAccessHandleVFS extends VFS.Base {
 
   get name() { return 'sync-access-handle'; }
 
+  xOpen(name, fileId, flags, pOutFlags) {
+    log(`xOpen ${name} ${fileId} 0x${flags.toString(16)}`);
+    try {
+      const path = name ? this.#getPath(name) : Math.random().toString(36);
+      let accessHandle = this.#mapPathToAccessHandle.get(path);
+      if (!accessHandle && (flags & VFS.SQLITE_OPEN_CREATE)) {
+        if (this.getSize() < this.getCapacity()) {
+          ([accessHandle] = this.#mapAccessHandleToName.keys());
+          this.#setAssociatedPath(accessHandle, path);
+        } else {
+          throw new Error('cannot create file');
+        }
+      }
+      if (!accessHandle) {
+        throw new Error('file not found');
+      }
+      this.#mapPathToAccessHandle.set(path, accessHandle);
+
+      const file = {
+        path,
+        flags,
+        accessHandle
+      }
+      this.#mapIdToFile.set(fileId, file);
+
+      pOutFlags.set(0);
+      return VFS.SQLITE_OK;
+    } catch (e) {
+      console.error(e.message);
+      return VFS.SQLITE_CANTOPEN;
+    }
+  }
+
+  xClose(fileId) {
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xClose ${file.filename}`);
+
+    this.#mapIdToFile.delete(fileId);
+    if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
+      this.#deletePath(file.path);
+    }
+
+    return VFS.SQLITE_OK;
+  }
+
+  xRead(fileId, pData, iOffset) {
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xRead ${file.path} ${pData.size} ${iOffset}`);
+
+    const nBytes = file.accessHandle.read(pData.value, { at: HEADER_OFFSET_DATA + iOffset });
+    if (nBytes < pData.size) {
+      pData.value.fill(0, nBytes, pData.size);
+      return VFS.SQLITE_IOERR_SHORT_READ;
+    }
+    return VFS.SQLITE_OK;
+  }
+
+  xWrite(fileId, pData, iOffset) {
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xWrite ${file.path} ${pData.size} ${iOffset}`);
+
+    const nBytes = file.accessHandle.write(pData.value, { at: HEADER_OFFSET_DATA + iOffset });
+    return nBytes === pData.size ? VFS.SQLITE_OK : VFS.SQLITE_IOERR;
+  }
+
+  xTruncate(fileId, iSize) {
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xTruncate ${file.path} ${iSize}`);
+
+    file.accessHandle.truncate(HEADER_OFFSET_DATA + iSize);
+    return VFS.SQLITE_OK;
+  }
+
+  xSync(fileId, flags) {
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xSync ${file.filename} ${flags}`);
+
+    file.accessHandle.flush();
+    return VFS.SQLITE_OK;
+  }
+
+  xFileSize(fileId, pSize64) {
+    const file = this.#mapIdToFile.get(fileId);
+    log(`xFileSize ${file.path}`);
+
+    const size = file.accessHandle.getSize() - HEADER_OFFSET_DATA;
+    pSize64.set(size);
+    return VFS.SQLITE_OK;
+  }
+
+  xSectorSize(fileId) {
+    log('xSectorSize', BLOCK_SIZE);
+    return BLOCK_SIZE;
+  }
+
+  xDeviceCharacteristics(fileId) {
+    log('xDeviceCharacteristics');
+    return VFS.SQLITE_IOCAP_SAFE_APPEND |
+           VFS.SQLITE_IOCAP_SEQUENTIAL |
+           VFS.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+  }
+
+  xAccess(name, flags, pResOut) {
+    log(`xAccess ${name} ${flags}`);
+    const path = this.#getPath(name);
+    if (this.#mapPathToAccessHandle.has(path)) {
+      pResOut.set(1);
+    } else {
+      pResOut.set(0);
+    }
+    return VFS.SQLITE_OK;
+  }
+
+  xDelete(name, syncDir) {
+    log(`xDelete ${name} ${syncDir}`);
+    const path = this.#getPath(name);
+    this.#deletePath(path);
+    return VFS.SQLITE_OK;
+  }
+
   async close() {
     await this.#releaseAccessHandles();
+  }
+
+  ready() {
+    return this.#ready;
   }
 
   getSize() {
@@ -193,5 +319,18 @@ export class SyncAccessHandleVFS extends VFS.Base {
       new URL(nameOrURL, 'file://localhost/') :
       nameOrURL;
     return url.pathname;
+  }
+
+  #deletePath(path) {
+    const accessHandle = this.#mapPathToAccessHandle.get(path);
+    if (accessHandle) {
+      this.#setAssociatedPath(accessHandle, '');
+      this.#mapPathToAccessHandle.delete(path);
+
+      // Move accessHandle to the front of #mapAccessHandleToName.
+      const name = this.#mapAccessHandleToName.get(accessHandle);
+      this.#mapAccessHandleToName.delete(accessHandle);
+      this.#mapAccessHandleToName.set(accessHandle, name);
+    }
   }
 }
