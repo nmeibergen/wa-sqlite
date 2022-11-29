@@ -12,7 +12,7 @@ const HEADER_OFFSET_DIGEST = HEADER_MAX_PATH_SIZE;
 const HEADER_OFFSET_DATA = HEADER_OFFSET_DIGEST + HEADER_DIGEST_SIZE;
 
 function log(...args) {
-  console.debug(...args);
+  // console.debug(...args);
 }
 
 /**
@@ -22,8 +22,6 @@ function log(...args) {
  * Asyncify.
  */
 export class SyncAccessHandleVFS extends VFS.Base {
-  #ready;
-
   // All the OPFS files the VFS uses are contained in one flat directory
   // specified in the constructor. No other files should be written here.
   #directoryPath;
@@ -139,7 +137,6 @@ export class SyncAccessHandleVFS extends VFS.Base {
 
   xFileSize(fileId, pSize64) {
     const file = this.#mapIdToFile.get(fileId);
-
     const size = file.accessHandle.getSize() - HEADER_OFFSET_DATA;
     log(`xFileSize ${file.path} ${size}`);
     pSize64.set(size);
@@ -332,6 +329,16 @@ export class SyncAccessHandleVFS extends VFS.Base {
       // This OPFS file doesn't represent any SQLite file so it doesn't
       // need to keep any data.
       accessHandle.truncate(HEADER_OFFSET_DATA);
+
+      // This OPFS file is now unassociated, so move it to the front
+      // of #mapAccessHandleToName.
+      const name = this.#mapAccessHandleToName.get(accessHandle);
+      if (name) {
+        this.#mapAccessHandleToName.delete(accessHandle);
+        this.#mapAccessHandleToName = new Map(
+          [[accessHandle, name],
+          ...this.#mapAccessHandleToName]);
+      }
     }
     accessHandle.flush();
 
@@ -383,11 +390,6 @@ export class SyncAccessHandleVFS extends VFS.Base {
       // Un-associate the SQLite path from the OPFS file.
       this.#setAssociatedPath(accessHandle, '');
       this.#mapPathToAccessHandle.delete(path);
-
-      // Move accessHandle to the front of #mapAccessHandleToName.
-      const name = this.#mapAccessHandleToName.get(accessHandle);
-      this.#mapAccessHandleToName.delete(accessHandle);
-      this.#mapAccessHandleToName.set(accessHandle, name);
     }
   }
 }
