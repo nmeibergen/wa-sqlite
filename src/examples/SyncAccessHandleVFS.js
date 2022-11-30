@@ -322,11 +322,14 @@ export class SyncAccessHandleVFS extends VFS.Base {
     }
     const digest = this.#computeDigest(encodedPath);
 
-    // Write the OPFS file header.
-    accessHandle.write(encodedPath, { at: HEADER_OFFSET_PATH });
-    accessHandle.write(digest, { at: HEADER_OFFSET_DIGEST });
-
-    if (!path) {
+    if (path) {
+      // Move associated access handles to the end of #mapAccessHandleToName.
+      const name = this.#mapAccessHandleToName.get(accessHandle);
+      if (name) {
+        this.#mapAccessHandleToName.delete(accessHandle);
+        this.#mapAccessHandleToName.set(accessHandle, name);
+      }
+    } else {
       // This OPFS file doesn't represent any SQLite file so it doesn't
       // need to keep any data.
       accessHandle.truncate(HEADER_OFFSET_DATA);
@@ -341,16 +344,12 @@ export class SyncAccessHandleVFS extends VFS.Base {
           ...this.#mapAccessHandleToName]);
       }
     }
+      
+    // Write the OPFS file header.
+    accessHandle.write(encodedPath, { at: HEADER_OFFSET_PATH });
+    accessHandle.write(digest, { at: HEADER_OFFSET_DIGEST });
     accessHandle.flush();
 
-    if (path) {
-      // Move associated access handles to the end of #mapAccessHandleToName.
-      const name = this.#mapAccessHandleToName.get(accessHandle);
-      if (name) {
-        this.#mapAccessHandleToName.delete(accessHandle);
-        this.#mapAccessHandleToName.set(accessHandle, name);
-      }
-    }
   }
 
   /**
