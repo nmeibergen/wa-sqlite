@@ -90,6 +90,7 @@ export class SyncAccessHandleVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     if (file) {
       log(`xClose ${file.path}`);
+      file.accessHandle.flush();
 
       this.#mapIdToFile.delete(fileId);
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
