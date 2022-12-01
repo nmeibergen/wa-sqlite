@@ -3,7 +3,7 @@ const button = /** @type {HTMLButtonElement} */ (document.getElementById('start'
 const preamble = /** @type {HTMLButtonElement} */ (document.getElementById('preamble'));
 const error = document.getElementById('error');
 
-const worker = new Worker('./sah-worker.js', { type: "module" });
+const worker = new Worker('./ahp-worker.js', { type: "module" });
 worker.addEventListener('message', function() {
   button.disabled = false;
 }, { once: true });

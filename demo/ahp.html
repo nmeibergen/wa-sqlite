@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8">
-    <title>wa-sqlite SAH benchmarks</title>
+    <title>wa-sqlite AccessHandlePool benchmarks</title>
     <style>
       #controls {
         margin-top: 1em;
@@ -30,14 +30,14 @@
     </style>
   </head>
   <body>
-    <h1>wa-sqlite SAH</h1>
+    <h1>OPFS AccessHandlePoolVFS</h1>
     Requires OriginPrivateFileSystem with updated synchronous access handles.
     These experimental APIs (and ES6 module worker) are not supported on
     all browsers and platforms.
     <div id="controls">
       <textarea id="preamble" rows="2" cols="48">
 -- Pre-run setup
-PRAGMA journal_mode=delete;
+PRAGMA journal_mode=persist;
       </textarea>
       <button id="start" disabled>Start</button>
     </div>
@@ -47,7 +47,7 @@ PRAGMA journal_mode=delete;
         <thead>
           <tr>
             <th>Test</th>
-            <th>SAH</th>
+            <th>AHP</th>
           </tr>
         </thead>
         <tbody>
@@ -102,7 +102,7 @@ PRAGMA journal_mode=delete;
         </tbody>
       </table>
     </div>
-    <script type="module" src="sah.js"></script>
+    <script type="module" src="ahp.js"></script>
 
     <a href="https://github.com/rhashimoto/wa-sqlite" class="github-corner" aria-label="View source on GitHub">
       <svg width="60" height="60" viewBox="0 0 250 250"

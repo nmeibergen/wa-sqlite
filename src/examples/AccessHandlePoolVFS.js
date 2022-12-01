@@ -21,7 +21,7 @@ function log(...args) {
  * work with the regular SQLite WebAssembly build, i.e. the one without
  * Asyncify.
  */
-export class SyncAccessHandleVFS extends VFS.Base {
+export class AccessHandlePoolVFS extends VFS.Base {
   // All the OPFS files the VFS uses are contained in one flat directory
   // specified in the constructor. No other files should be written here.
   #directoryPath;
@@ -31,7 +31,8 @@ export class SyncAccessHandleVFS extends VFS.Base {
   // the SQLite files whose data they contain. This map links those names
   // with their respective OPFS access handles. In this map, all the OPFS
   // files that are not yet associated with a SQLite file precede the
-  // OPFS files that are associated with a SQLite file.
+  // OPFS files that are associated with a SQLite file - when an unassociated
+  // OPFS file access handle is needed, the first entry in this map is used.
   #mapAccessHandleToName = new Map();
 
   // When a SQLite file is associated with an OPFS file, that association
@@ -60,7 +61,8 @@ export class SyncAccessHandleVFS extends VFS.Base {
           ([accessHandle] = this.#mapAccessHandleToName.keys());
           this.#setAssociatedPath(accessHandle, path);
         } else {
-          // Out of unassociated files. This can be fixed with addCapacity().
+          // Out of unassociated files. This can be fixed by calling
+          // addCapacity() from the application.
           throw new Error('cannot create file');
         }
       }
@@ -71,11 +73,7 @@ export class SyncAccessHandleVFS extends VFS.Base {
 
       // Subsequent methods are only passed the fileId, so make sure we have
       // a way to get the file resources.
-      const file = {
-        path,
-        flags,
-        accessHandle
-      }
+      const file = { path, flags, accessHandle };
       this.#mapIdToFile.set(fileId, file);
 
       pOutFlags.set(0);
@@ -90,8 +88,8 @@ export class SyncAccessHandleVFS extends VFS.Base {
     const file = this.#mapIdToFile.get(fileId);
     if (file) {
       log(`xClose ${file.path}`);
-      file.accessHandle.flush();
 
+      file.accessHandle.flush();
       this.#mapIdToFile.delete(fileId);
       if (file.flags & VFS.SQLITE_OPEN_DELETEONCLOSE) {
         this.#deletePath(file.path);
@@ -157,11 +155,7 @@ export class SyncAccessHandleVFS extends VFS.Base {
   xAccess(name, flags, pResOut) {
     log(`xAccess ${name} ${flags}`);
     const path = this.#getPath(name);
-    if (this.#mapPathToAccessHandle.has(path)) {
-      pResOut.set(1);
-    } else {
-      pResOut.set(0);
-    }
+    pResOut.set(this.#mapPathToAccessHandle.has(path) ? 1 : 0);
     return VFS.SQLITE_OK;
   }
 
@@ -249,6 +243,7 @@ export class SyncAccessHandleVFS extends VFS.Base {
       this.#mapAccessHandleToName.delete(accessHandle);
       ++nRemoved;
     }
+    return nRemoved;
   }
 
   async #acquireAccessHandles() {
@@ -284,9 +279,10 @@ export class SyncAccessHandleVFS extends VFS.Base {
   }
 
   /**
-   * 
-   * // @param {FileSystemSyncAccessHandle} accessHandle 
-   * @returns {string}
+   * Read and return the associated path from an OPFS file header.
+   * Empty string is returned for an unassociated OPFS file.
+   * @param accessHandle FileSystemSyncAccessHandle
+   * @returns {string} path or empty string
    */
   #getAssociatedPath(accessHandle) {
     // Read the path and digest of the path from the file.
@@ -310,7 +306,8 @@ export class SyncAccessHandleVFS extends VFS.Base {
   }
 
   /**
-   * // @param {FileSystemSyncAccessHandle} accessHandle 
+   * Set the path on an OPFS file header.
+   * @param accessHandle FileSystemSyncAccessHandle
    * @param {string} path
    */
   #setAssociatedPath(accessHandle, path) {
@@ -340,8 +337,7 @@ export class SyncAccessHandleVFS extends VFS.Base {
       if (name) {
         this.#mapAccessHandleToName.delete(accessHandle);
         this.#mapAccessHandleToName = new Map(
-          [[accessHandle, name],
-          ...this.#mapAccessHandleToName]);
+          [[accessHandle, name], ...this.#mapAccessHandleToName]);
       }
     }
       
@@ -349,14 +345,13 @@ export class SyncAccessHandleVFS extends VFS.Base {
     accessHandle.write(encodedPath, { at: HEADER_OFFSET_PATH });
     accessHandle.write(digest, { at: HEADER_OFFSET_DIGEST });
     accessHandle.flush();
-
   }
 
   /**
    * We need a synchronous digest function so can't use WebCrypto.
    * Adapted from https://github.com/bryc/code/blob/master/jshash/experimental/cyrb53.js
    * @param {Uint8Array} corpus 
-   * @returns {ArrayBuffer}
+   * @returns {ArrayBuffer} 64-bit digest
    */
   #computeDigest(corpus) {
     let h1 = 0xdeadbeef;
@@ -374,8 +369,9 @@ export class SyncAccessHandleVFS extends VFS.Base {
   };
   
   /**
+   * Convert a bare filename, path, or URL to a UNIX-style path.
    * @param {string|URL} nameOrURL
-   * @returns {string}
+   * @returns {string} path
    */
   #getPath(nameOrURL) {
     const url = typeof nameOrURL === 'string' ?
@@ -384,6 +380,10 @@ export class SyncAccessHandleVFS extends VFS.Base {
     return url.pathname;
   }
 
+  /**
+   * Remove the association between a path and an OPFS file.
+   * @param {string} path 
+   */
   #deletePath(path) {
     const accessHandle = this.#mapPathToAccessHandle.get(path);
     if (accessHandle) {

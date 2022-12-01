@@ -1,6 +1,6 @@
 import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
 import * as SQLite from '../src/sqlite-api.js';
-import { SyncAccessHandleVFS } from "../src/examples/SyncAccessHandleVFS";
+import { AccessHandlePoolVFS } from "../src/examples/AccessHandlePoolVFS";
 import { tag } from "../src/examples/tag.js";
 
 console.log('worker started');
@@ -20,7 +20,7 @@ console.log('worker started');
 
   await new Promise(resolve => setTimeout(resolve, 2000));
 
-  globalThis.vfs = new SyncAccessHandleVFS('/foo');
+  globalThis.vfs = new AccessHandlePoolVFS('/foo');
   await globalThis.vfs.reset();
   if (globalThis.vfs.getCapacity() < 6) {
     await globalThis.vfs.addCapacity(6 - globalThis.vfs.getCapacity());

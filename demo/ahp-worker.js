@@ -1,6 +1,6 @@
 import SQLiteModuleFactory from '../dist/wa-sqlite.mjs';
 import * as SQLite from '../src/sqlite-api.js';
-import { SyncAccessHandleVFS } from '../src/examples/SyncAccessHandleVFS';
+import { AccessHandlePoolVFS } from '../src/examples/AccessHandlePoolVFS';
 
 const DB_NAME = 'file:///benchmark?foo=bar';
 const TESTS = [
@@ -31,7 +31,7 @@ let vfs;
   sqlite3 = SQLite.Factory(module);
 
   // @ts-ignore
-  vfs = new SyncAccessHandleVFS('/sah');
+  vfs = new AccessHandlePoolVFS('/sah');
   await vfs.reset();
   if (vfs.getCapacity() < 6) {
     await vfs.addCapacity(6 - vfs.getCapacity());
