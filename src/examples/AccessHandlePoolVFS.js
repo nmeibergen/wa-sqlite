@@ -297,6 +297,13 @@ export class AccessHandlePoolVFS extends VFS.Base {
     if (fileDigest.every((value, i) => value === computedDigest[i])) {
       // Good digest. Decode the null-terminated path string.
       const pathBytes = encodedPath.findIndex(value => value === 0);
+      if (pathBytes === 0) {
+        // Ensure that unassociated files are empty. Unassociated files are
+        // truncated in #setAssociatedPath after the header is written. If
+        // an interruption occurs right before the truncation then garbage
+        // may remain in the file.
+        accessHandle.truncate(HEADER_OFFSET_DATA);
+      }
       return new TextDecoder().decode(encodedPath.subarray(0, pathBytes));
     } else {
       // Bad digest. Repair this header.
@@ -319,6 +326,11 @@ export class AccessHandlePoolVFS extends VFS.Base {
     }
     const digest = this.#computeDigest(encodedPath);
 
+    // Write the OPFS file header.
+    accessHandle.write(encodedPath, { at: HEADER_OFFSET_PATH });
+    accessHandle.write(digest, { at: HEADER_OFFSET_DIGEST });
+    accessHandle.flush();
+
     if (path) {
       // Move associated access handles to the end of #mapAccessHandleToName.
       const name = this.#mapAccessHandleToName.get(accessHandle);
@@ -340,11 +352,6 @@ export class AccessHandlePoolVFS extends VFS.Base {
           [[accessHandle, name], ...this.#mapAccessHandleToName]);
       }
     }
-      
-    // Write the OPFS file header.
-    accessHandle.write(encodedPath, { at: HEADER_OFFSET_PATH });
-    accessHandle.write(digest, { at: HEADER_OFFSET_DIGEST });
-    accessHandle.flush();
   }
 
   /**
