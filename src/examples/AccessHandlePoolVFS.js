@@ -247,26 +247,28 @@ export class AccessHandlePoolVFS extends VFS.Base {
   }
 
   async #acquireAccessHandles() {
-    /** @type {[any, string][]} */ const tuplesWithPath = [];
-    /** @type {[any, string][]} */ const tuplesWithoutPath = [];
-
     // Enumerate all the files in the directory.
-    // @ts-ignore
+    const files = [];
     for await (const [name, handle] of this.#directoryHandle) {
       if (handle.kind === 'file') {
-        const accessHandle = await handle.createSyncAccessHandle();
-
-        const path = this.#getAssociatedPath(accessHandle);
-        if (path) {
-          this.#mapPathToAccessHandle.set(path, accessHandle);
-          tuplesWithPath.push([accessHandle, name]);
-        } else {
-          tuplesWithoutPath.push([accessHandle, name]);
-        }
-        console.debug(name, path);
+        files.push([name, handle]);
       }
     }
 
+    // Open access handles in parallel, separating associated and unassociated.
+    /** @type {[any, string][]} */ const tuplesWithPath = [];
+    /** @type {[any, string][]} */ const tuplesWithoutPath = [];
+    await Promise.all(files.map(async ([name, handle]) => {
+      const accessHandle = await handle.createSyncAccessHandle();
+      const path = this.#getAssociatedPath(accessHandle);
+      if (path) {
+        this.#mapPathToAccessHandle.set(path, accessHandle);
+        tuplesWithPath.push([accessHandle, name]);
+      } else {
+        tuplesWithoutPath.push([accessHandle, name]);
+      }
+      console.debug(name, path);
+    }));
     this.#mapAccessHandleToName = new Map([...tuplesWithoutPath, ...tuplesWithPath]);
   }
 
