@@ -223,6 +223,7 @@ dist/wa-sqlite.mjs: $(BITCODE_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS)
 	  $(EMFLAGS_INTERFACES) \
 	  $(EMFLAGS_LIBRARIES) \
 	  $(BITCODE_FILES_DIST) -o $@
+	  sed -i '' 's/\"module\"/\"node:module\"/g' $@
 
 dist/wa-sqlite-async.mjs: $(BITCODE_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNCTIONS) $(EXPORTED_RUNTIME_METHODS) $(ASYNCIFY_IMPORTS)
 	mkdir -p dist
@@ -231,3 +232,4 @@ dist/wa-sqlite-async.mjs: $(BITCODE_FILES_DIST) $(LIBRARY_FILES) $(EXPORTED_FUNC
 	  $(EMFLAGS_LIBRARIES) \
 	  $(EMFLAGS_ASYNCIFY_DIST) \
 	  $(BITCODE_FILES_DIST) -o $@
+	sed -i '' 's/\"module\"/\"node:module\"/g' $@
