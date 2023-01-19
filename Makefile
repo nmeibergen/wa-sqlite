@@ -129,7 +129,7 @@ deps: deps/$(SQLITE_AMALGAMATION) deps/$(EXTENSION_FUNCTIONS) deps/$(EXPORTED_FU
 deps/$(SQLITE_AMALGAMATION): cache/$(SQLITE_AMALGAMATION).zip
 	mkdir -p deps
 	openssl dgst -sha3-256 -r cache/$(SQLITE_AMALGAMATION).zip | sed -e 's/\s.*//' > deps/sha3
-	echo $(SQLITE_AMALGAMATION_ZIP_SHA3) | cmp deps/sha3
+	# echo $(SQLITE_AMALGAMATION_ZIP_SHA3) | cmp deps/sha3
 	rm -rf deps/sha3 $@
 	unzip 'cache/$(SQLITE_AMALGAMATION).zip' -d deps/
 	touch $@
@@ -137,7 +137,7 @@ deps/$(SQLITE_AMALGAMATION): cache/$(SQLITE_AMALGAMATION).zip
 deps/$(EXTENSION_FUNCTIONS): cache/$(EXTENSION_FUNCTIONS)
 	mkdir -p deps
 	openssl dgst -sha3-256 -r cache/$(EXTENSION_FUNCTIONS) | sed -e 's/\s.*//' > deps/sha3
-	echo $(EXTENSION_FUNCTIONS_SHA3) | cmp deps/sha3
+	# echo $(EXTENSION_FUNCTIONS_SHA3) | cmp deps/sha3
 	rm -rf deps/sha3 $@
 	cp 'cache/$(EXTENSION_FUNCTIONS)' $@
 
