@@ -2,7 +2,7 @@ import SQLiteModuleFactory from '../dist/wa-sqlite-async.mjs';
 import * as SQLite from '../src/sqlite-api.js';
 import { OriginPrivateFileSystemVFS } from '../src/examples/OriginPrivateFileSystemVFS.js';
 
-const DB_NAME = 'file:///benchmark?foo=bar';
+const DB_NAME = 'file:///benchmark.db';
 const TESTS = [
   test1,
   test2,
